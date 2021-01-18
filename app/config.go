@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -27,7 +26,7 @@ import (
 )
 
 const (
-	ERROR_TERMS_OF_SERVICE_NO_ROWS_FOUND = "app.terms_of_service.get.no_rows.app_error"
+	ErrorTermsOfServiceNoRowsFound = "app.terms_of_service.get.no_rows.app_error"
 )
 
 func (s *Server) Config() *model.Config {
@@ -60,7 +59,6 @@ func (a *App) UpdateConfig(f func(*model.Config)) {
 }
 
 func (s *Server) ReloadConfig() error {
-	debug.FreeOSMemory()
 	if err := s.configStore.Load(); err != nil {
 		return err
 	}
@@ -139,8 +137,8 @@ func (s *Server) ensurePostActionCookieSecret() error {
 		}
 		system.Value = string(v)
 		// If we were able to save the key, use it, otherwise log the error.
-		if appErr := s.Store.System().Save(system); appErr != nil {
-			mlog.Error("Failed to save PostActionCookieSecret", mlog.Err(appErr))
+		if err = s.Store.System().Save(system); err != nil {
+			mlog.Warn("Failed to save PostActionCookieSecret", mlog.Err(err))
 		} else {
 			secret = newSecret
 		}
@@ -166,7 +164,7 @@ func (s *Server) ensurePostActionCookieSecret() error {
 // ensureAsymmetricSigningKey ensures that an asymmetric signing key exists and future calls to
 // AsymmetricSigningKey will always return a valid signing key.
 func (s *Server) ensureAsymmetricSigningKey() error {
-	if s.asymmetricSigningKey != nil {
+	if s.AsymmetricSigningKey() != nil {
 		return nil
 	}
 
@@ -202,8 +200,8 @@ func (s *Server) ensureAsymmetricSigningKey() error {
 		}
 		system.Value = string(v)
 		// If we were able to save the key, use it, otherwise log the error.
-		if appErr := s.Store.System().Save(system); appErr != nil {
-			mlog.Error("Failed to save AsymmetricSigningKey", mlog.Err(appErr))
+		if err = s.Store.System().Save(system); err != nil {
+			mlog.Warn("Failed to save AsymmetricSigningKey", mlog.Err(err))
 		} else {
 			key = newKey
 		}
@@ -229,53 +227,51 @@ func (s *Server) ensureAsymmetricSigningKey() error {
 	default:
 		return fmt.Errorf("unknown curve: " + key.ECDSAKey.Curve)
 	}
-	s.asymmetricSigningKey = &ecdsa.PrivateKey{
+	s.asymmetricSigningKey.Store(&ecdsa.PrivateKey{
 		PublicKey: ecdsa.PublicKey{
 			Curve: curve,
 			X:     key.ECDSAKey.X,
 			Y:     key.ECDSAKey.Y,
 		},
 		D: key.ECDSAKey.D,
-	}
+	})
 	s.regenerateClientConfig()
 	return nil
 }
 
 func (s *Server) ensureInstallationDate() error {
-	_, err := s.getSystemInstallDate()
-	if err == nil {
+	_, appErr := s.getSystemInstallDate()
+	if appErr == nil {
 		return nil
 	}
 
-	installDate, err := s.Store.User().InferSystemInstallDate()
+	installDate, nErr := s.Store.User().InferSystemInstallDate()
 	var installationDate int64
-	if err == nil && installDate > 0 {
+	if nErr == nil && installDate > 0 {
 		installationDate = installDate
 	} else {
 		installationDate = utils.MillisFromTime(time.Now())
 	}
 
-	err = s.Store.System().SaveOrUpdate(&model.System{
+	if err := s.Store.System().SaveOrUpdate(&model.System{
 		Name:  model.SYSTEM_INSTALLATION_DATE_KEY,
 		Value: strconv.FormatInt(installationDate, 10),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *Server) ensureFirstServerRunTimestamp() error {
-	_, err := s.getFirstServerRunTimestamp()
-	if err == nil {
+	_, appErr := s.getFirstServerRunTimestamp()
+	if appErr == nil {
 		return nil
 	}
 
-	err = s.Store.System().SaveOrUpdate(&model.System{
+	if err := s.Store.System().SaveOrUpdate(&model.System{
 		Name:  model.SYSTEM_FIRST_SERVER_RUN_TIMESTAMP_KEY,
 		Value: strconv.FormatInt(utils.MillisFromTime(time.Now()), 10),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 	return nil
@@ -283,7 +279,10 @@ func (s *Server) ensureFirstServerRunTimestamp() error {
 
 // AsymmetricSigningKey will return a private key that can be used for asymmetric signing.
 func (s *Server) AsymmetricSigningKey() *ecdsa.PrivateKey {
-	return s.asymmetricSigningKey
+	if key := s.asymmetricSigningKey.Load(); key != nil {
+		return key.(*ecdsa.PrivateKey)
+	}
+	return nil
 }
 
 func (a *App) AsymmetricSigningKey() *ecdsa.PrivateKey {
@@ -299,8 +298,8 @@ func (a *App) PostActionCookieSecret() []byte {
 }
 
 func (s *Server) regenerateClientConfig() {
-	clientConfig := config.GenerateClientConfig(s.Config(), s.diagnosticId, s.License())
-	limitedClientConfig := config.GenerateLimitedClientConfig(s.Config(), s.diagnosticId, s.License())
+	clientConfig := config.GenerateClientConfig(s.Config(), s.TelemetryId(), s.License())
+	limitedClientConfig := config.GenerateLimitedClientConfig(s.Config(), s.TelemetryId(), s.License())
 
 	if clientConfig["EnableCustomTermsOfService"] == "true" {
 		termsOfService, err := s.Store.TermsOfService().GetLatest(true)
@@ -348,6 +347,7 @@ func (s *Server) ClientConfigWithComputed() map[string]string {
 	// by the client.
 	respCfg["NoAccounts"] = strconv.FormatBool(s.IsFirstUserAccount())
 	respCfg["MaxPostSize"] = strconv.Itoa(s.MaxPostSize())
+	respCfg["UpgradedFromTE"] = strconv.FormatBool(s.isUpgradedFromTE())
 	respCfg["InstallationDate"] = ""
 	if installationDate, err := s.getSystemInstallDate(); err == nil {
 		respCfg["InstallationDate"] = strconv.FormatInt(installationDate, 10)

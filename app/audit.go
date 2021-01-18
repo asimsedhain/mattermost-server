@@ -10,6 +10,7 @@ import (
 	"os/user"
 
 	"github.com/hashicorp/go-multierror"
+
 	"github.com/mattermost/mattermost-server/v5/audit"
 	"github.com/mattermost/mattermost-server/v5/config"
 	"github.com/mattermost/mattermost-server/v5/mlog"
@@ -161,7 +162,9 @@ func (s *Server) configureAudit(adt *audit.Audit, bAllowAdvancedLogging bool) er
 			errs = multierror.Append(err)
 			continue
 		}
-		adt.AddTarget(target)
+		if target != nil {
+			adt.AddTarget(target)
+		}
 	}
 	return errs
 }

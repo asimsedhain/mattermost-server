@@ -9,10 +9,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v5/audit"
-	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/mattermost/mattermost-server/v5/audit"
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 var ExportCmd = &cobra.Command{
@@ -170,7 +171,11 @@ func buildExportCmdF(format string) func(command *cobra.Command, args []string) 
 		if warningsCount == 0 {
 			CommandPrettyPrintln("SUCCESS: Your data was exported.")
 		} else {
-			CommandPrettyPrintln(fmt.Sprintf("WARNING: %d warnings encountered, see warning.txt for details.", warningsCount))
+			if format == model.COMPLIANCE_EXPORT_TYPE_GLOBALRELAY || format == model.COMPLIANCE_EXPORT_TYPE_GLOBALRELAY_ZIP {
+				CommandPrettyPrintln(fmt.Sprintf("WARNING: %d warnings encountered, see logs for details.", warningsCount))
+			} else {
+				CommandPrettyPrintln(fmt.Sprintf("WARNING: %d warnings encountered, see warning.txt for details.", warningsCount))
+			}
 		}
 
 		auditRec := a.MakeAuditRecord("buildExport", audit.Success)

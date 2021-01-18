@@ -9,17 +9,17 @@ import (
 	"strings"
 
 	"github.com/mattermost/gorp"
+	"github.com/pkg/errors"
+
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/store"
-
-	"github.com/pkg/errors"
 )
 
 type SqlSchemeStore struct {
-	SqlStore
+	*SqlStore
 }
 
-func newSqlSchemeStore(sqlStore SqlStore) store.SchemeStore {
+func newSqlSchemeStore(sqlStore *SqlStore) store.SchemeStore {
 	s := &SqlSchemeStore{sqlStore}
 
 	for _, db := range sqlStore.GetAllConns() {
@@ -234,7 +234,7 @@ func (s *SqlSchemeStore) createScheme(scheme *model.Scheme, transaction *gorp.Tr
 func filterModerated(permissions []string) []string {
 	filteredPermissions := []string{}
 	for _, perm := range permissions {
-		if _, ok := model.CHANNEL_MODERATED_PERMISSIONS_MAP[perm]; ok {
+		if _, ok := model.ChannelModeratedPermissionsMap[perm]; ok {
 			filteredPermissions = append(filteredPermissions, perm)
 		}
 	}

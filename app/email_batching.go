@@ -6,21 +6,20 @@ package app
 import (
 	"fmt"
 	"html/template"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/mattermost/go-i18n/i18n"
+
 	"github.com/mattermost/mattermost-server/v5/mlog"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/utils"
-
-	"net/http"
-
-	"github.com/mattermost/go-i18n/i18n"
 )
 
 const (
-	EMAIL_BATCHING_TASK_NAME = "Email Batching"
+	EmailBatchingTaskName = "Email Batching"
 )
 
 func (es *EmailService) InitEmailBatching() {
@@ -72,7 +71,7 @@ func NewEmailBatchingJob(es *EmailService, bufferSize int) *EmailBatchingJob {
 
 func (job *EmailBatchingJob) Start() {
 	mlog.Debug("Email batching job starting. Checking for pending emails periodically.", mlog.Int("interval_in_seconds", *job.server.Config().EmailSettings.EmailBatchingInterval))
-	newTask := model.CreateRecurringTask(EMAIL_BATCHING_TASK_NAME, job.CheckPendingEmails, time.Duration(*job.server.Config().EmailSettings.EmailBatchingInterval)*time.Second)
+	newTask := model.CreateRecurringTask(EmailBatchingTaskName, job.CheckPendingEmails, time.Duration(*job.server.Config().EmailSettings.EmailBatchingInterval)*time.Second)
 
 	job.taskMutex.Lock()
 	oldTask := job.task
@@ -140,9 +139,9 @@ func (job *EmailBatchingJob) checkPendingNotifications(now time.Time, handler fu
 				continue
 			}
 
-			team, err := job.server.Store.Team().GetByName(notifications[0].teamName)
-			if err != nil {
-				mlog.Error("Unable to find Team id for notification", mlog.Err(err))
+			team, nErr := job.server.Store.Team().GetByName(notifications[0].teamName)
+			if nErr != nil {
+				mlog.Error("Unable to find Team id for notification", mlog.Err(nErr))
 				continue
 			}
 

@@ -6,10 +6,11 @@ package storetest
 import (
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v5/model"
-	"github.com/mattermost/mattermost-server/v5/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
 )
 
 func TestTermsOfServiceStore(t *testing.T, ss store.Store) {
@@ -18,7 +19,19 @@ func TestTermsOfServiceStore(t *testing.T, ss store.Store) {
 	t.Run("TestGetTermsOfService", func(t *testing.T) { testGetTermsOfService(t, ss) })
 }
 
+func cleanUpTOS(ss store.Store) {
+	// Clearing out the table before starting the test.
+	// Otherwise the row inserted by the previous Save call from testSaveTermsOfService
+	// gets picked up.
+	// We call DropAllTables but we actually need to delete only TermsOfService.
+	// However, there is no straightforward way to just clear that table without introducing
+	// new methods. So we use the hammer.
+	ss.DropAllTables()
+}
+
 func testSaveTermsOfService(t *testing.T, ss store.Store) {
+	t.Cleanup(func() { cleanUpTOS(ss) })
+
 	u1 := model.User{}
 	u1.Username = model.NewId()
 	u1.Email = MakeEmail()
@@ -36,6 +49,8 @@ func testSaveTermsOfService(t *testing.T, ss store.Store) {
 }
 
 func testGetLatestTermsOfService(t *testing.T, ss store.Store) {
+	t.Cleanup(func() { cleanUpTOS(ss) })
+
 	u1 := model.User{}
 	u1.Username = model.NewId()
 	u1.Email = MakeEmail()
@@ -43,7 +58,7 @@ func testGetLatestTermsOfService(t *testing.T, ss store.Store) {
 	_, appErr := ss.User().Save(&u1)
 	require.Nil(t, appErr)
 
-	termsOfService := &model.TermsOfService{Text: "terms of service", UserId: u1.Id}
+	termsOfService := &model.TermsOfService{Text: "terms of service 2", UserId: u1.Id}
 	_, err := ss.TermsOfService().Save(termsOfService)
 	require.Nil(t, err)
 
@@ -54,6 +69,8 @@ func testGetLatestTermsOfService(t *testing.T, ss store.Store) {
 }
 
 func testGetTermsOfService(t *testing.T, ss store.Store) {
+	t.Cleanup(func() { cleanUpTOS(ss) })
+
 	u1 := model.User{}
 	u1.Username = model.NewId()
 	u1.Email = MakeEmail()

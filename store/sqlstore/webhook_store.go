@@ -6,23 +6,23 @@ package sqlstore
 import (
 	"database/sql"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/pkg/errors"
 
-	sq "github.com/Masterminds/squirrel"
 	"github.com/mattermost/mattermost-server/v5/einterfaces"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/store"
 )
 
 type SqlWebhookStore struct {
-	SqlStore
+	*SqlStore
 	metrics einterfaces.MetricsInterface
 }
 
 func (s SqlWebhookStore) ClearCaches() {
 }
 
-func newSqlWebhookStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface) store.WebhookStore {
+func newSqlWebhookStore(sqlStore *SqlStore, metrics einterfaces.MetricsInterface) store.WebhookStore {
 	s := &SqlWebhookStore{
 		SqlStore: sqlStore,
 		metrics:  metrics,
@@ -36,6 +36,8 @@ func newSqlWebhookStore(sqlStore SqlStore, metrics einterfaces.MetricsInterface)
 		table.ColMap("TeamId").SetMaxSize(26)
 		table.ColMap("DisplayName").SetMaxSize(64)
 		table.ColMap("Description").SetMaxSize(500)
+		table.ColMap("Username").SetMaxSize(255)
+		table.ColMap("IconURL").SetMaxSize(1024)
 
 		tableo := db.AddTableWithName(model.OutgoingWebhook{}, "OutgoingWebhooks").SetKeys(false, "Id")
 		tableo.ColMap("Id").SetMaxSize(26)

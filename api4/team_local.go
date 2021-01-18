@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/mattermost/mattermost-server/v5/audit"
 	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
 )
 
 func (api *API) InitTeamLocal() {
@@ -89,9 +92,15 @@ func localInviteUsersToTeam(c *Context, w http.ResponseWriter, r *http.Request) 
 	auditRec.AddMeta("count", len(emailList))
 	auditRec.AddMeta("emails", emailList)
 
-	team, err := c.App.Srv().Store.Team().Get(c.Params.TeamId)
-	if err != nil {
-		c.Err = err
+	team, nErr := c.App.Srv().Store.Team().Get(c.Params.TeamId)
+	if nErr != nil {
+		var nfErr *store.ErrNotFound
+		switch {
+		case errors.As(nErr, &nfErr):
+			c.Err = model.NewAppError("localInviteUsersToTeam", "app.team.get.find.app_error", nil, nfErr.Error(), http.StatusNotFound)
+		default:
+			c.Err = model.NewAppError("localInviteUsersToTeam", "app.team.get.finding.app_error", nil, nErr.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -115,7 +124,11 @@ func localInviteUsersToTeam(c *Context, w http.ResponseWriter, r *http.Request) 
 		}
 		auditRec.AddMeta("errors", errList)
 		if len(goodEmails) > 0 {
-			c.App.Srv().EmailService.SendInviteEmails(team, "Administrator", "mmctl "+model.NewId(), goodEmails, *c.App.Config().ServiceSettings.SiteURL)
+			err := c.App.Srv().EmailService.SendInviteEmails(team, "Administrator", "mmctl "+model.NewId(), goodEmails, *c.App.Config().ServiceSettings.SiteURL)
+			if err != nil {
+				c.Err = err
+				return
+			}
 		}
 		// in graceful mode we return both the successful ones and the failed ones
 		w.Write([]byte(model.EmailInviteWithErrorToJson(invitesWithErrors)))
@@ -132,7 +145,11 @@ func localInviteUsersToTeam(c *Context, w http.ResponseWriter, r *http.Request) 
 			c.Err = model.NewAppError("localInviteUsersToTeam", "api.team.invite_members.invalid_email.app_error", map[string]interface{}{"Addresses": s}, "", http.StatusBadRequest)
 			return
 		}
-		c.App.Srv().EmailService.SendInviteEmails(team, "Administrator", "mmctl "+model.NewId(), emailList, *c.App.Config().ServiceSettings.SiteURL)
+		err := c.App.Srv().EmailService.SendInviteEmails(team, "Administrator", "mmctl "+model.NewId(), emailList, *c.App.Config().ServiceSettings.SiteURL)
+		if err != nil {
+			c.Err = err
+			return
+		}
 		ReturnStatusOK(w)
 	}
 	auditRec.Success()

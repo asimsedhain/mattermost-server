@@ -158,7 +158,8 @@ func getPostsForChannel(c *Context, w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	skipFetchThreads := r.URL.Query().Get("skipFetchThreads") == "true"
-
+	collapsedThreads := r.URL.Query().Get("collapsedThreads") == "true"
+	collapsedThreadsExtended := r.URL.Query().Get("collapsedThreadsExtended") == "true"
 	channelId := c.Params.ChannelId
 	page := c.Params.Page
 	perPage := c.Params.PerPage
@@ -173,31 +174,31 @@ func getPostsForChannel(c *Context, w http.ResponseWriter, r *http.Request) {
 	etag := ""
 
 	if since > 0 {
-		list, err = c.App.GetPostsSince(model.GetPostsSinceOptions{ChannelId: channelId, Time: since, SkipFetchThreads: skipFetchThreads})
+		list, err = c.App.GetPostsSince(model.GetPostsSinceOptions{ChannelId: channelId, Time: since, SkipFetchThreads: skipFetchThreads, CollapsedThreads: collapsedThreads, CollapsedThreadsExtended: collapsedThreadsExtended})
 	} else if len(afterPost) > 0 {
-		etag = c.App.GetPostsEtag(channelId)
+		etag = c.App.GetPostsEtag(channelId, collapsedThreads)
 
 		if c.HandleEtag(etag, "Get Posts After", w, r) {
 			return
 		}
 
-		list, err = c.App.GetPostsAfterPost(model.GetPostsOptions{ChannelId: channelId, PostId: afterPost, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads})
+		list, err = c.App.GetPostsAfterPost(model.GetPostsOptions{ChannelId: channelId, PostId: afterPost, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads, CollapsedThreads: collapsedThreads})
 	} else if len(beforePost) > 0 {
-		etag = c.App.GetPostsEtag(channelId)
+		etag = c.App.GetPostsEtag(channelId, collapsedThreads)
 
 		if c.HandleEtag(etag, "Get Posts Before", w, r) {
 			return
 		}
 
-		list, err = c.App.GetPostsBeforePost(model.GetPostsOptions{ChannelId: channelId, PostId: beforePost, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads})
+		list, err = c.App.GetPostsBeforePost(model.GetPostsOptions{ChannelId: channelId, PostId: beforePost, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads, CollapsedThreads: collapsedThreads, CollapsedThreadsExtended: collapsedThreadsExtended})
 	} else {
-		etag = c.App.GetPostsEtag(channelId)
+		etag = c.App.GetPostsEtag(channelId, collapsedThreads)
 
 		if c.HandleEtag(etag, "Get Posts", w, r) {
 			return
 		}
 
-		list, err = c.App.GetPostsPage(model.GetPostsOptions{ChannelId: channelId, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads})
+		list, err = c.App.GetPostsPage(model.GetPostsOptions{ChannelId: channelId, Page: page, PerPage: perPage, SkipFetchThreads: skipFetchThreads, CollapsedThreads: collapsedThreads, CollapsedThreadsExtended: collapsedThreadsExtended})
 	}
 
 	if err != nil {
@@ -239,7 +240,10 @@ func getPostsForChannelAroundLastUnread(c *Context, w http.ResponseWriter, r *ht
 	}
 
 	skipFetchThreads := r.URL.Query().Get("skipFetchThreads") == "true"
-	postList, err := c.App.GetPostsForChannelAroundLastUnread(channelId, userId, c.Params.LimitBefore, c.Params.LimitAfter, skipFetchThreads)
+	collapsedThreads := r.URL.Query().Get("collapsedThreads") == "true"
+	collapsedThreadsExtended := r.URL.Query().Get("collapsedThreadsExtended") == "true"
+
+	postList, err := c.App.GetPostsForChannelAroundLastUnread(channelId, userId, c.Params.LimitBefore, c.Params.LimitAfter, skipFetchThreads, collapsedThreads, collapsedThreadsExtended)
 	if err != nil {
 		c.Err = err
 		return
@@ -247,13 +251,13 @@ func getPostsForChannelAroundLastUnread(c *Context, w http.ResponseWriter, r *ht
 
 	etag := ""
 	if len(postList.Order) == 0 {
-		etag = c.App.GetPostsEtag(channelId)
+		etag = c.App.GetPostsEtag(channelId, collapsedThreads)
 
 		if c.HandleEtag(etag, "Get Posts", w, r) {
 			return
 		}
 
-		postList, err = c.App.GetPostsPage(model.GetPostsOptions{ChannelId: channelId, Page: app.PAGE_DEFAULT, PerPage: c.Params.LimitBefore, SkipFetchThreads: skipFetchThreads})
+		postList, err = c.App.GetPostsPage(model.GetPostsOptions{ChannelId: channelId, Page: app.PageDefault, PerPage: c.Params.LimitBefore, SkipFetchThreads: skipFetchThreads, CollapsedThreads: collapsedThreads, CollapsedThreadsExtended: collapsedThreadsExtended})
 		if err != nil {
 			c.Err = err
 			return
@@ -295,6 +299,10 @@ func getFlaggedPostsForUser(c *Context, w http.ResponseWriter, r *http.Request) 
 	} else {
 		posts, err = c.App.GetFlaggedPosts(c.Params.UserId, c.Params.Page, c.Params.PerPage)
 	}
+	if err != nil {
+		c.Err = err
+		return
+	}
 
 	pl := model.NewPostList()
 	channelReadPermission := make(map[string]bool)
@@ -321,12 +329,6 @@ func getFlaggedPostsForUser(c *Context, w http.ResponseWriter, r *http.Request) 
 	}
 
 	pl.SortByCreateAt()
-
-	if err != nil {
-		c.Err = err
-		return
-	}
-
 	w.Write([]byte(c.App.PreparePostListForClient(pl).ToJson()))
 }
 
@@ -414,7 +416,9 @@ func getPostThread(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	skipFetchThreads := r.URL.Query().Get("skipFetchThreads") == "true"
-	list, err := c.App.GetPostThread(c.Params.PostId, skipFetchThreads)
+	collapsedThreads := r.URL.Query().Get("collapsedThreads") == "true"
+	collapsedThreadsExtended := r.URL.Query().Get("collapsedThreadsExtended") == "true"
+	list, err := c.App.GetPostThread(c.Params.PostId, skipFetchThreads, collapsedThreads, collapsedThreadsExtended)
 	if err != nil {
 		c.Err = err
 		return
@@ -466,7 +470,11 @@ func searchPosts(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := model.SearchParameterFromJson(r.Body)
+	params, jsonErr := model.SearchParameterFromJson(r.Body)
+	if jsonErr != nil {
+		c.Err = model.NewAppError("searchPosts", "api.post.search_posts.invalid_body.app_error", nil, jsonErr.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if params.Terms == nil || len(*params.Terms) == 0 {
 		c.SetInvalidParam("terms")

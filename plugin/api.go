@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	plugin "github.com/hashicorp/go-plugin"
+
 	"github.com/mattermost/mattermost-server/v5/model"
 )
 
@@ -84,7 +85,7 @@ type API interface {
 	// Minimum server version: 5.10
 	GetBundlePath() (string, error)
 
-	// GetLicense returns the current license used by the Mattermost server. Returns nil if the
+	// GetLicense returns the current license used by the Mattermost server. Returns nil if
 	// the server does not have a license.
 	//
 	// @tag Server
@@ -108,6 +109,12 @@ type API interface {
 	// @tag Server
 	// Minimum server version: 5.10
 	GetDiagnosticId() string
+
+	// GetTelemetryId returns a unique identifier used by the server for telemetry reports.
+	//
+	// @tag Server
+	// Minimum server version: 5.28
+	GetTelemetryId() string
 
 	// CreateUser creates a user.
 	//

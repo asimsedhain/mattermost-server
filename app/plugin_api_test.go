@@ -21,15 +21,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mattermost/mattermost-server/v5/einterfaces/mocks"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/plugin"
 	"github.com/mattermost/mattermost-server/v5/utils"
 	"github.com/mattermost/mattermost-server/v5/utils/fileutils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func getDefaultPluginSettingsSchema() string {
@@ -70,10 +70,21 @@ func setDefaultPluginConfig(th *TestHelper, pluginId string) {
 func setupMultiPluginApiTest(t *testing.T, pluginCodes []string, pluginManifests []string, pluginIds []string, app *App) string {
 	pluginDir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = os.RemoveAll(pluginDir)
+		if err != nil {
+			t.Logf("Failed to cleanup pluginDir %s", err.Error())
+		}
+	})
+
 	webappPluginDir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
-	defer os.RemoveAll(pluginDir)
-	defer os.RemoveAll(webappPluginDir)
+	t.Cleanup(func() {
+		err = os.RemoveAll(webappPluginDir)
+		if err != nil {
+			t.Logf("Failed to cleanup webappPluginDir %s", err.Error())
+		}
+	})
 
 	env, err := plugin.NewEnvironment(app.NewPluginAPI, pluginDir, webappPluginDir, app.Log(), nil)
 	require.NoError(t, err)
@@ -90,6 +101,12 @@ func setupMultiPluginApiTest(t *testing.T, pluginCodes []string, pluginManifests
 		require.Nil(t, reterr)
 		require.NotNil(t, manifest)
 		require.True(t, activated)
+
+		app.UpdateConfig(func(cfg *model.Config) {
+			cfg.PluginSettings.PluginStates[pluginId] = &model.PluginState{
+				Enable: true,
+			}
+		})
 	}
 
 	app.SetPluginsEnvironment(env)

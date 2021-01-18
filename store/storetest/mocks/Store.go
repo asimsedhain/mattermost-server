@@ -236,20 +236,20 @@ func (_m *Store) GetCurrentSchemaVersion() string {
 	return r0
 }
 
-// GetDbVersion provides a mock function with given fields:
-func (_m *Store) GetDbVersion() (string, error) {
-	ret := _m.Called()
+// GetDbVersion provides a mock function with given fields: numerical
+func (_m *Store) GetDbVersion(numerical bool) (string, error) {
+	ret := _m.Called(numerical)
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func() string); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(bool) string); ok {
+		r0 = rf(numerical)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(bool) error); ok {
+		r1 = rf(numerical)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -395,6 +395,22 @@ func (_m *Store) Preference() store.PreferenceStore {
 	return r0
 }
 
+// ProductNotices provides a mock function with given fields:
+func (_m *Store) ProductNotices() store.ProductNoticesStore {
+	ret := _m.Called()
+
+	var r0 store.ProductNoticesStore
+	if rf, ok := ret.Get(0).(func() store.ProductNoticesStore); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.ProductNoticesStore)
+		}
+	}
+
+	return r0
+}
+
 // Reaction provides a mock function with given fields:
 func (_m *Store) Reaction() store.ReactionStore {
 	ret := _m.Called()
@@ -533,6 +549,22 @@ func (_m *Store) TermsOfService() store.TermsOfServiceStore {
 	return r0
 }
 
+// Thread provides a mock function with given fields:
+func (_m *Store) Thread() store.ThreadStore {
+	ret := _m.Called()
+
+	var r0 store.ThreadStore
+	if rf, ok := ret.Get(0).(func() store.ThreadStore); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.ThreadStore)
+		}
+	}
+
+	return r0
+}
+
 // Token provides a mock function with given fields:
 func (_m *Store) Token() store.TokenStore {
 	ret := _m.Called()
@@ -594,6 +626,22 @@ func (_m *Store) TotalSearchDbConnections() int {
 // UnlockFromMaster provides a mock function with given fields:
 func (_m *Store) UnlockFromMaster() {
 	_m.Called()
+}
+
+// UploadSession provides a mock function with given fields:
+func (_m *Store) UploadSession() store.UploadSessionStore {
+	ret := _m.Called()
+
+	var r0 store.UploadSessionStore
+	if rf, ok := ret.Get(0).(func() store.UploadSessionStore); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(store.UploadSessionStore)
+		}
+	}
+
+	return r0
 }
 
 // User provides a mock function with given fields:

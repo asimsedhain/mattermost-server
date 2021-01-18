@@ -50,16 +50,16 @@ func (api *PluginAPI) LoadPluginConfiguration(dest interface{}) error {
 		finalConfig[strings.ToLower(setting)] = value
 	}
 
-	if pluginSettingsJsonBytes, err := json.Marshal(finalConfig); err != nil {
+	pluginSettingsJsonBytes, err := json.Marshal(finalConfig)
+	if err != nil {
 		api.logger.Error("Error marshaling config for plugin", mlog.Err(err))
 		return nil
-	} else {
-		err := json.Unmarshal(pluginSettingsJsonBytes, dest)
-		if err != nil {
-			api.logger.Error("Error unmarshaling config for plugin", mlog.Err(err))
-		}
-		return nil
 	}
+	err = json.Unmarshal(pluginSettingsJsonBytes, dest)
+	if err != nil {
+		api.logger.Error("Error unmarshaling config for plugin", mlog.Err(err))
+	}
+	return nil
 }
 
 func (api *PluginAPI) RegisterCommand(command *model.Command) error {
@@ -144,7 +144,11 @@ func (api *PluginAPI) GetSystemInstallDate() (int64, *model.AppError) {
 }
 
 func (api *PluginAPI) GetDiagnosticId() string {
-	return api.app.DiagnosticId()
+	return api.app.TelemetryId()
+}
+
+func (api *PluginAPI) GetTelemetryId() string {
+	return api.app.TelemetryId()
 }
 
 func (api *PluginAPI) CreateTeam(team *model.Team) (*model.Team, *model.AppError) {
@@ -310,9 +314,17 @@ func (api *PluginAPI) UpdateUserStatus(userId, status string) (*model.Status, *m
 func (api *PluginAPI) GetUsersInChannel(channelId, sortBy string, page, perPage int) ([]*model.User, *model.AppError) {
 	switch sortBy {
 	case model.CHANNEL_SORT_BY_USERNAME:
-		return api.app.GetUsersInChannel(channelId, page*perPage, perPage)
+		return api.app.GetUsersInChannel(&model.UserGetOptions{
+			InChannelId: channelId,
+			Page:        page,
+			PerPage:     perPage,
+		})
 	case model.CHANNEL_SORT_BY_STATUS:
-		return api.app.GetUsersInChannelByStatus(channelId, page*perPage, perPage)
+		return api.app.GetUsersInChannelByStatus(&model.UserGetOptions{
+			InChannelId: channelId,
+			Page:        page,
+			PerPage:     perPage,
+		})
 	default:
 		return nil, model.NewAppError("GetUsersInChannel", "plugin.api.get_users_in_channel", nil, "invalid sort option", http.StatusBadRequest)
 	}
@@ -562,7 +574,7 @@ func (api *PluginAPI) DeletePost(postId string) *model.AppError {
 }
 
 func (api *PluginAPI) GetPostThread(postId string) (*model.PostList, *model.AppError) {
-	return api.app.GetPostThread(postId, false)
+	return api.app.GetPostThread(postId, false, false, false)
 }
 
 func (api *PluginAPI) GetPost(postId string) (*model.Post, *model.AppError) {

@@ -19,17 +19,12 @@ import (
 )
 
 const (
-	OPEN_TRACING_PARAMS_MARKER = "@openTracingParams"
-	APP_ERROR_TYPE             = "*model.AppError"
-	ERROR_TYPE                 = "error"
+	OpenTracingParamsMarker = "@openTracingParams"
+	ErrorType               = "error"
 )
 
 func isError(typeName string) bool {
-	return strings.Contains(typeName, APP_ERROR_TYPE) || strings.Contains(typeName, ERROR_TYPE)
-}
-
-func isAppError(typeName string) bool {
-	return strings.Contains(typeName, APP_ERROR_TYPE)
+	return strings.Contains(typeName, ErrorType)
 }
 
 func main() {
@@ -114,8 +109,8 @@ func extractMethodMetadata(method *ast.Field, src []byte) methodData {
 			if method.Doc != nil {
 				for _, comment := range method.Doc.List {
 					s := comment.Text
-					if idx := strings.Index(s, OPEN_TRACING_PARAMS_MARKER); idx != -1 {
-						for _, p := range strings.Split(s[idx+len(OPEN_TRACING_PARAMS_MARKER):], ",") {
+					if idx := strings.Index(s, OpenTracingParamsMarker); idx != -1 {
+						for _, p := range strings.Split(s[idx+len(OpenTracingParamsMarker):], ",") {
 							paramsToTrace[strings.TrimSpace(p)] = true
 						}
 					}
@@ -143,7 +138,7 @@ func extractMethodMetadata(method *ast.Field, src []byte) methodData {
 					}
 				}
 				if !found {
-					log.Fatalf("Unable to find a parameter called '%s' (method '%s') that is mentioned in the '%s' comment. Maybe it was renamed?", paramName, method.Names[0].Name, OPEN_TRACING_PARAMS_MARKER)
+					log.Fatalf("Unable to find a parameter called '%s' (method '%s') that is mentioned in the '%s' comment. Maybe it was renamed?", paramName, method.Names[0].Name, OpenTracingParamsMarker)
 				}
 			}
 		}
@@ -231,11 +226,15 @@ func generateLayer(name, templateFile string) ([]byte, error) {
 			}
 			return fmt.Sprintf("(%s)", strings.Join(results, ", "))
 		},
-		"genResultsVars": func(results []string) string {
+		"genResultsVars": func(results []string, withNilError bool) string {
 			vars := []string{}
 			for i, typeName := range results {
 				if isError(typeName) {
-					vars = append(vars, "err")
+					if withNilError {
+						vars = append(vars, "nil")
+					} else {
+						vars = append(vars, "err")
+					}
 				} else if i == 0 {
 					vars = append(vars, "result")
 				} else {
@@ -247,18 +246,10 @@ func generateLayer(name, templateFile string) ([]byte, error) {
 		"errorToBoolean": func(results []string) string {
 			for _, typeName := range results {
 				if isError(typeName) {
-					return fmt.Sprintf("err == nil")
+					return "err == nil"
 				}
 			}
 			return "true"
-		},
-		"isAppError": func(results []string) bool {
-			for _, typeName := range results {
-				if isAppError(typeName) {
-					return true
-				}
-			}
-			return false
 		},
 		"errorPresent": func(results []string) bool {
 			for _, typeName := range results {

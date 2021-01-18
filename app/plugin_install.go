@@ -16,7 +16,7 @@
 //
 // To achieve this coordination, each server instead checks the status of its peers after unpacking. If it finds peers with
 // differing versions of the plugin, it skips the notification. If it finds all peers with the same version of the plugin,
-// it notifies all websocket clients connected to all peers. There's a small chance that this never occurs if the the last
+// it notifies all websocket clients connected to all peers. There's a small chance that this never occurs if the last
 // server to finish unpacking dies before it can announce. There is also a chance that multiple servers decide to notify,
 // but the webapp handles this idempotently.
 //
@@ -111,11 +111,11 @@ func (a *App) RemovePluginFromData(data model.PluginEventData) {
 	mlog.Debug("Removing plugin as per cluster message", mlog.String("plugin_id", data.Id))
 
 	if err := a.removePluginLocally(data.Id); err != nil {
-		mlog.Error("Failed to remove plugin locally", mlog.Err(err), mlog.String("id", data.Id))
+		mlog.Warn("Failed to remove plugin locally", mlog.Err(err), mlog.String("id", data.Id))
 	}
 
 	if err := a.notifyPluginStatusesChanged(); err != nil {
-		mlog.Error("failed to notify plugin status changed", mlog.Err(err))
+		mlog.Warn("failed to notify plugin status changed", mlog.Err(err))
 	}
 }
 
@@ -161,11 +161,11 @@ func (a *App) installPlugin(pluginFile, signature io.ReadSeeker, installationStr
 	)
 
 	if err := a.notifyPluginEnabled(manifest); err != nil {
-		mlog.Error("Failed notify plugin enabled", mlog.Err(err))
+		mlog.Warn("Failed notify plugin enabled", mlog.Err(err))
 	}
 
 	if err := a.notifyPluginStatusesChanged(); err != nil {
-		mlog.Error("Failed to notify plugin status changed", mlog.Err(err))
+		mlog.Warn("Failed to notify plugin status changed", mlog.Err(err))
 	}
 
 	return manifest, nil
@@ -376,6 +376,8 @@ func (a *App) installExtractedPlugin(manifest *model.Manifest, fromPluginDir str
 		updatedManifest, _, err := pluginsEnvironment.Activate(manifest.Id)
 		if err != nil {
 			return nil, model.NewAppError("installExtractedPlugin", "app.plugin.restart.app_error", nil, err.Error(), http.StatusInternalServerError)
+		} else if updatedManifest == nil {
+			return nil, model.NewAppError("installExtractedPlugin", "app.plugin.restart.app_error", nil, "failed to activate plugin: plugin already active", http.StatusInternalServerError)
 		}
 		manifest = updatedManifest
 	}
@@ -411,7 +413,7 @@ func (a *App) removePlugin(id string) *model.AppError {
 		return model.NewAppError("removePlugin", "app.plugin.remove_bundle.app_error", nil, err.Error(), http.StatusInternalServerError)
 	}
 	if err = a.removeSignature(id); err != nil {
-		mlog.Error("Can't remove signature", mlog.Err(err))
+		mlog.Warn("Can't remove signature", mlog.Err(err))
 	}
 
 	a.notifyClusterPluginEvent(
@@ -422,7 +424,7 @@ func (a *App) removePlugin(id string) *model.AppError {
 	)
 
 	if err := a.notifyPluginStatusesChanged(); err != nil {
-		mlog.Error("Failed to notify plugin status changed", mlog.Err(err))
+		mlog.Warn("Failed to notify plugin status changed", mlog.Err(err))
 	}
 
 	return nil

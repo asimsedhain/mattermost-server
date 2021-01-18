@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/mattermost/go-i18n/i18n"
+
 	"github.com/mattermost/mattermost-server/v5/mlog"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/utils/fileutils"
@@ -32,7 +34,13 @@ func TranslationsPreInit() error {
 	// segfault trying to handle the error, and the untranslated IDs are strictly better.
 	T = TfuncWithFallback("en")
 	TDefault = TfuncWithFallback("en")
-	return InitTranslationsWithDir("i18n")
+
+	translationsDir := "i18n"
+	if mattermostPath := os.Getenv("MM_SERVER_PATH"); mattermostPath != "" {
+		translationsDir = filepath.Join(mattermostPath, "i18n")
+	}
+
+	return InitTranslationsWithDir(translationsDir)
 }
 
 func InitTranslations(localizationSettings model.LocalizationSettings) error {
@@ -46,7 +54,7 @@ func InitTranslations(localizationSettings model.LocalizationSettings) error {
 func InitTranslationsWithDir(dir string) error {
 	i18nDirectory, found := fileutils.FindDirRelBinary(dir)
 	if !found {
-		return fmt.Errorf("Unable to find i18n directory")
+		return fmt.Errorf(fmt.Sprintf("Unable to find i18n directory at %q", dir))
 	}
 
 	files, _ := ioutil.ReadDir(i18nDirectory)
@@ -67,7 +75,7 @@ func InitTranslationsWithDir(dir string) error {
 func GetTranslationsBySystemLocale() (i18n.TranslateFunc, error) {
 	locale := *settings.DefaultServerLocale
 	if _, ok := locales[locale]; !ok {
-		mlog.Error("Failed to load system translations for", mlog.String("locale", locale), mlog.String("attempting to fall back to default locale", model.DEFAULT_LOCALE))
+		mlog.Warn("Failed to load system translations for", mlog.String("locale", locale), mlog.String("attempting to fall back to default locale", model.DEFAULT_LOCALE))
 		locale = model.DEFAULT_LOCALE
 	}
 

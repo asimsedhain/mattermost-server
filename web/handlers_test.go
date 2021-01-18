@@ -8,12 +8,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mattermost/mattermost-server/v5/app"
 	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/mattermost/mattermost-server/v5/plugin/plugintest/mock"
 	"github.com/mattermost/mattermost-server/v5/store/storetest/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func handlerForHTTPErrors(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -70,6 +71,7 @@ func TestHandlerServeHTTPSecureTransport(t *testing.T) {
 	mockPostStore := mocks.PostStore{}
 	mockPostStore.On("GetMaxPostSize").Return(65535, nil)
 	mockSystemStore := mocks.SystemStore{}
+	mockSystemStore.On("GetByName", "UpgradedFromTE").Return(&model.System{Name: "UpgradedFromTE", Value: "false"}, nil)
 	mockSystemStore.On("GetByName", "InstallationDate").Return(&model.System{Name: "InstallationDate", Value: "10"}, nil)
 	mockSystemStore.On("GetByName", "FirstServerRunTimestamp").Return(&model.System{Name: "FirstServerRunTimestamp", Value: "10"}, nil)
 
@@ -311,6 +313,7 @@ func TestHandlerServeCSPHeader(t *testing.T) {
 		mockPostStore := mocks.PostStore{}
 		mockPostStore.On("GetMaxPostSize").Return(65535, nil)
 		mockSystemStore := mocks.SystemStore{}
+		mockSystemStore.On("GetByName", "UpgradedFromTE").Return(&model.System{Name: "UpgradedFromTE", Value: "false"}, nil)
 		mockSystemStore.On("GetByName", "InstallationDate").Return(&model.System{Name: "InstallationDate", Value: "10"}, nil)
 		mockSystemStore.On("GetByName", "FirstServerRunTimestamp").Return(&model.System{Name: "FirstServerRunTimestamp", Value: "10"}, nil)
 
@@ -449,8 +452,8 @@ func TestCheckCSRFToken(t *testing.T) {
 		tokenLocation := app.TokenLocationCookie
 
 		c := &Context{
-			App: th.App,
-			Log: th.App.Log(),
+			App:    th.App,
+			Logger: th.App.Log(),
 		}
 		r, _ := http.NewRequest(http.MethodPost, "", nil)
 		r.Header.Set(model.HEADER_REQUESTED_WITH, model.HEADER_REQUESTED_WITH_XML)
@@ -477,6 +480,7 @@ func TestCheckCSRFToken(t *testing.T) {
 		mockPostStore := mocks.PostStore{}
 		mockPostStore.On("GetMaxPostSize").Return(65535, nil)
 		mockSystemStore := mocks.SystemStore{}
+		mockSystemStore.On("GetByName", "UpgradedFromTE").Return(&model.System{Name: "UpgradedFromTE", Value: "false"}, nil)
 		mockSystemStore.On("GetByName", "InstallationDate").Return(&model.System{Name: "InstallationDate", Value: "10"}, nil)
 		mockSystemStore.On("GetByName", "FirstServerRunTimestamp").Return(&model.System{Name: "FirstServerRunTimestamp", Value: "10"}, nil)
 
@@ -497,8 +501,8 @@ func TestCheckCSRFToken(t *testing.T) {
 		tokenLocation := app.TokenLocationCookie
 
 		c := &Context{
-			App: th.App,
-			Log: th.App.Log(),
+			App:    th.App,
+			Logger: th.App.Log(),
 		}
 		r, _ := http.NewRequest(http.MethodPost, "", nil)
 		r.Header.Set(model.HEADER_REQUESTED_WITH, model.HEADER_REQUESTED_WITH_XML)

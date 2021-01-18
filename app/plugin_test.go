@@ -75,8 +75,8 @@ func TestPluginKeyValueStore(t *testing.T) {
 		ExpireAt: 0,
 	}
 
-	_, err = th.App.Srv().Store.Plugin().SaveOrUpdate(kv)
-	assert.Nil(t, err)
+	_, nErr := th.App.Srv().Store.Plugin().SaveOrUpdate(kv)
+	assert.Nil(t, nErr)
 
 	// Test fetch by keyname (this key does not exist but hashed key will be used for lookup)
 	ret, err = th.App.GetPluginKey(pluginId, "key2")
@@ -629,6 +629,65 @@ func TestPluginSync(t *testing.T) {
 	}
 }
 
+func TestSyncPluginsActiveState(t *testing.T) {
+	th := Setup(t)
+	defer th.TearDown()
+
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		*cfg.PluginSettings.Enable = true
+	})
+
+	env := th.App.GetPluginsEnvironment()
+	require.NotNil(t, env)
+
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		*cfg.PluginSettings.RequirePluginSignature = false
+	})
+
+	path, _ := fileutils.FindDir("tests")
+	fileReader, err := os.Open(filepath.Join(path, "testplugin.tar.gz"))
+	require.NoError(t, err)
+	defer fileReader.Close()
+
+	_, appErr := th.App.WriteFile(fileReader, th.App.getBundleStorePath("testplugin"))
+	checkNoError(t, appErr)
+
+	// Sync with file store so the plugin environment has access to this plugin.
+	appErr = th.App.SyncPlugins()
+	checkNoError(t, appErr)
+
+	// Verify the plugin was installed and set to deactivated.
+	pluginStatus, err := env.Statuses()
+	require.Nil(t, err)
+	require.Len(t, pluginStatus, 1)
+	require.Equal(t, pluginStatus[0].PluginId, "testplugin")
+	require.Equal(t, pluginStatus[0].State, model.PluginStateNotRunning)
+
+	// Enable plugin by setting setting config. This implicitly calls SyncPluginsActiveState through a config listener.
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		cfg.PluginSettings.PluginStates["testplugin"] = &model.PluginState{Enable: true}
+	})
+
+	// Verify the plugin was activated due to config change.
+	pluginStatus, err = env.Statuses()
+	require.Nil(t, err)
+	require.Len(t, pluginStatus, 1)
+	require.Equal(t, pluginStatus[0].PluginId, "testplugin")
+	require.Equal(t, pluginStatus[0].State, model.PluginStateRunning)
+
+	// Disable plugin by setting config. This implicitly calls SyncPluginsActiveState through a config listener.
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		cfg.PluginSettings.PluginStates["testplugin"] = &model.PluginState{Enable: false}
+	})
+
+	// Verify the plugin was deactivated due to config change.
+	pluginStatus, err = env.Statuses()
+	require.Nil(t, err)
+	require.Len(t, pluginStatus, 1)
+	require.Equal(t, pluginStatus[0].PluginId, "testplugin")
+	require.Equal(t, pluginStatus[0].State, model.PluginStateNotRunning)
+}
+
 func TestPluginPanicLogs(t *testing.T) {
 	t.Run("should panic", func(t *testing.T) {
 		th := Setup(t).InitBasic()
@@ -656,7 +715,6 @@ func TestPluginPanicLogs(t *testing.T) {
 		}
 		`,
 		}, th.App, th.App.NewPluginAPI)
-		defer tearDown()
 
 		post := &model.Post{
 			UserId:    th.BasicUser.Id,
@@ -666,6 +724,9 @@ func TestPluginPanicLogs(t *testing.T) {
 		}
 		_, err := th.App.CreatePost(post, th.BasicChannel, false, true)
 		assert.Nil(t, err)
+		// We shutdown plugins first so that the read on the log buffer is race-free.
+		th.App.Srv().ShutDownPlugins()
+		tearDown()
 
 		testlib.AssertLog(t, th.LogBuffer, mlog.LevelDebug, "panic: some text from panic")
 	})

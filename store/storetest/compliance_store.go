@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v5/model"
-	"github.com/mattermost/mattermost-server/v5/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost-server/v5/model"
+	"github.com/mattermost/mattermost-server/v5/store"
 )
 
 func cleanupStoreState(t *testing.T, ss store.Store) {
@@ -31,13 +32,13 @@ func cleanupStoreState(t *testing.T, ss store.Store) {
 	allChannels, nErr := ss.Channel().GetAllChannels(0, 100000, store.ChannelSearchOpts{IncludeDeleted: true})
 	require.Nilf(t, nErr, "error cleaning all test channels: %v", nErr)
 	for _, channel := range *allChannels {
-		nErr := ss.Channel().PermanentDelete(channel.Id)
+		nErr = ss.Channel().PermanentDelete(channel.Id)
 		require.Nil(t, nErr, "failed cleaning up test channel %s", channel.Id)
 	}
 
 	//remove existing teams
-	allTeams, err := ss.Team().GetAll()
-	require.Nilf(t, err, "error cleaning all test teams: %v", err)
+	allTeams, nErr := ss.Team().GetAll()
+	require.Nilf(t, nErr, "error cleaning all test teams: %v", nErr)
 	for _, team := range allTeams {
 		err := ss.Team().PermanentDelete(team.Id)
 		require.Nil(t, err, "failed cleaning up test team %s", team.Id)

@@ -10,10 +10,11 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/mattermost/mattermost-server/v5/app"
 	"github.com/mattermost/mattermost-server/v5/audit"
 	"github.com/mattermost/mattermost-server/v5/model"
-	"github.com/spf13/cobra"
 )
 
 var UserCmd = &cobra.Command{
@@ -623,7 +624,10 @@ func inviteUser(a *app.App, email string, team *model.Team, teamArg string) erro
 		return fmt.Errorf("Email invites are disabled.")
 	}
 
-	a.Srv().EmailService.SendInviteEmails(team, "Administrator", "Mattermost CLI "+model.NewId(), invites, *a.Config().ServiceSettings.SiteURL)
+	err := a.Srv().EmailService.SendInviteEmails(team, "Administrator", "Mattermost CLI "+model.NewId(), invites, *a.Config().ServiceSettings.SiteURL)
+	if err != nil {
+		return err
+	}
 	CommandPrettyPrintln("Invites may or may not have been sent.")
 
 	auditRec := a.MakeAuditRecord("inviteUser", audit.Success)

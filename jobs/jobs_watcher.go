@@ -13,7 +13,7 @@ import (
 
 // Default polling interval for jobs termination.
 // (Defining as `var` rather than `const` allows tests to lower the interval.)
-var DEFAULT_WATCHER_POLLING_INTERVAL = 15000
+var DefaultWatcherPollingInterval = 15000
 
 type Watcher struct {
 	srv     *JobServer
@@ -132,6 +132,34 @@ func (watcher *Watcher) PollAndNotify() {
 			if watcher.workers.ExpiryNotify != nil {
 				select {
 				case watcher.workers.ExpiryNotify.JobChannel() <- *job:
+				default:
+				}
+			}
+		} else if job.Type == model.JOB_TYPE_PRODUCT_NOTICES {
+			if watcher.workers.ProductNotices != nil {
+				select {
+				case watcher.workers.ProductNotices.JobChannel() <- *job:
+				default:
+				}
+			}
+		} else if job.Type == model.JOB_TYPE_ACTIVE_USERS {
+			if watcher.workers.ActiveUsers != nil {
+				select {
+				case watcher.workers.ActiveUsers.JobChannel() <- *job:
+				default:
+				}
+			}
+		} else if job.Type == model.JOB_TYPE_IMPORT_PROCESS {
+			if watcher.workers.ImportProcess != nil {
+				select {
+				case watcher.workers.ImportProcess.JobChannel() <- *job:
+				default:
+				}
+			}
+		} else if job.Type == model.JOB_TYPE_CLOUD {
+			if watcher.workers.Cloud != nil {
+				select {
+				case watcher.workers.Cloud.JobChannel() <- *job:
 				default:
 				}
 			}

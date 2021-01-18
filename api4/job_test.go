@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v5/model"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mattermost/mattermost-server/v5/model"
 )
 
 func TestCreateJob(t *testing.T) {
@@ -18,11 +19,14 @@ func TestCreateJob(t *testing.T) {
 	defer th.TearDown()
 
 	job := &model.Job{
-		Type: model.JOB_TYPE_DATA_RETENTION,
+		Type: model.JOB_TYPE_MESSAGE_EXPORT,
 		Data: map[string]string{
 			"thing": "stuff",
 		},
 	}
+
+	_, resp := th.SystemManagerClient.CreateJob(job)
+	require.Nil(t, resp.Error)
 
 	received, resp := th.SystemAdminClient.CreateJob(job)
 	require.Nil(t, resp.Error)
@@ -172,6 +176,9 @@ func TestGetJobsByType(t *testing.T) {
 
 	_, resp = th.Client.GetJobsByType(jobType, 0, 60)
 	CheckForbiddenStatus(t, resp)
+
+	_, resp = th.SystemManagerClient.GetJobsByType(model.JOB_TYPE_MESSAGE_EXPORT, 0, 60)
+	require.Nil(t, resp.Error)
 }
 
 func TestDownloadJob(t *testing.T) {
@@ -195,11 +202,11 @@ func TestDownloadJob(t *testing.T) {
 		*cfg.MessageExportSettings.DownloadExportResults = true
 	})
 
-	// Normal user cannot download the results of these job (Doesn't have permission)
+	// Normal user cannot download the results of these job (non-existent job)
 	_, resp = th.Client.DownloadJob(job.Id)
-	CheckForbiddenStatus(t, resp)
+	CheckNotFoundStatus(t, resp)
 
-	// System admin trying to download the results of a non-existant job
+	// System admin trying to download the results of a non-existent job
 	_, resp = th.SystemAdminClient.DownloadJob(job.Id)
 	CheckNotFoundStatus(t, resp)
 
@@ -214,6 +221,14 @@ func TestDownloadJob(t *testing.T) {
 	require.Nil(t, mkdirAllErr)
 	os.Create(filePath)
 
+	// Normal user cannot download the results of these job (not the right permission)
+	_, resp = th.Client.DownloadJob(job.Id)
+	CheckForbiddenStatus(t, resp)
+
+	// System manager with default permissions cannot download the results of these job (Doesn't have correct permissions)
+	_, resp = th.SystemManagerClient.DownloadJob(job.Id)
+	CheckForbiddenStatus(t, resp)
+
 	_, resp = th.SystemAdminClient.DownloadJob(job.Id)
 	CheckBadRequestStatus(t, resp)
 
@@ -227,13 +242,31 @@ func TestDownloadJob(t *testing.T) {
 
 	// Now we stub the results of the job into the same directory and try to download it again
 	// This time we should successfully retrieve the results without any error
-	filePath = "./data/export/" + job.Id + "/csv_export.zip"
+	filePath = "./data/export/" + job.Id + ".zip"
 	mkdirAllErr = os.MkdirAll(filepath.Dir(filePath), 0770)
 	require.Nil(t, mkdirAllErr)
 	os.Create(filePath)
 
 	_, resp = th.SystemAdminClient.DownloadJob(job.Id)
 	require.Nil(t, resp.Error)
+
+	// Here we are creating a new job which doesn't have type of message export
+	jobName = model.NewId()
+	job = &model.Job{
+		Id:   jobName,
+		Type: model.JOB_TYPE_CLOUD,
+		Data: map[string]string{
+			"export_type": "csv",
+		},
+		Status: model.JOB_STATUS_SUCCESS,
+	}
+	_, err = th.App.Srv().Store.Job().Save(job)
+	require.Nil(t, err)
+	defer th.App.Srv().Store.Job().Delete(job.Id)
+
+	// System admin shouldn't be able to download since the job type is not message export
+	_, resp = th.SystemAdminClient.DownloadJob(job.Id)
+	CheckBadRequestStatus(t, resp)
 }
 
 func TestCancelJob(t *testing.T) {
